@@ -1,10 +1,18 @@
-FROM ubuntu:22.04 AS base
+FROM ghcr.io/linuxserver/baseimage-ubuntu:jammy AS base
 
-# Install docker for passing the socket to allow for intercontainer exec
-RUN apt-get update && \
-  apt-get -y upgrade &&\
+RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 605C66F00D6C9793 0E98404D386FA1D9 648ACFD622F3D138 && \
+  echo deb http://http.us.debian.org/debian sid main >> /etc/apt/sources.list && \
+  echo "Package: *" > /etc/apt/preferences && \
+  echo "Pin: release o=Debian" >> /etc/apt/preferences && \
+  echo "Pin-Priority: 1" >> /etc/apt/preferences && \
+  echo "" >> /etc/apt/preferences && \
+  echo "Package: librtlsdr*" >> /etc/apt/preferences && \
+  echo "Pin: release o=Debian" >> /etc/apt/preferences && \
+  echo "Pin-Priority: 1500" >> /etc/apt/preferences && \
+  apt-get update && \
+  apt-get -y upgrade && \
   export DEBIAN_FRONTEND=noninteractive && \
-  apt-get install -y \
+  apt-get install -y --no-install-recommends \
     apt-transport-https \
     build-essential \
     ca-certificates \
@@ -38,17 +46,14 @@ RUN apt-get update && \
     pkg-config \
     software-properties-common \
     sox \
-    wget && \
-  rm -rf /var/lib/apt/lists/*
+    wget
 
 COPY lib/gr-osmosdr/airspy_source_c.cc.patch /tmp/airspy_source_c.cc.patch
 
 # Fix the error message level for SmartNet
-
-RUN sed -i 's/log_level = debug/log_level = info/g' /etc/gnuradio/conf.d/gnuradio-runtime.conf
-
+RUN sed -i 's/log_level = debug/log_level = info/g' /etc/gnuradio/conf.d/gnuradio-runtime.conf && \
 # Compile gr-osmosdr ourselves so we can install the Airspy serial number patch
-RUN cd /tmp && \
+  cd /tmp && \
   git clone https://git.osmocom.org/gr-osmosdr && \
   cd gr-osmosdr && \
   git apply ../airspy_source_c.cc.patch && \
@@ -67,9 +72,10 @@ COPY . .
 
 WORKDIR /src/build
 
-RUN cmake .. && make -j$(nproc) && make install
-
-#USER nobody
+RUN cmake .. && make -j$(nproc) && make install && \
+  # Clean up
+  apt-get autoremove -y && \
+  rm -rf /src/* /tmp/* /var/lib/apt/lists/*
 
 WORKDIR /app
 
