@@ -46,33 +46,29 @@ RUN apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 605C66F00D6C9793 0E
     pkg-config \
     software-properties-common \
     sox \
-    wget
-
-COPY lib/gr-osmosdr/airspy_source_c.cc.patch /tmp/airspy_source_c.cc.patch
-
-# Fix the error message level for SmartNet
-RUN sed -i 's/log_level = debug/log_level = info/g' /etc/gnuradio/conf.d/gnuradio-runtime.conf && \
-# Compile gr-osmosdr ourselves so we can install the Airspy serial number patch
+    wget && \
+  # Fix the error message level for SmartNet
+  sed -i 's/log_level = debug/log_level = info/g' /etc/gnuradio/conf.d/gnuradio-runtime.conf && \
+  # Compile gr-osmosdr ourselves so we can install the Airspy serial number patch
   cd /tmp && \
   git clone https://git.osmocom.org/gr-osmosdr && \
   cd gr-osmosdr && \
-  git apply ../airspy_source_c.cc.patch && \
+  wget -q -O - https://raw.githubusercontent.com/robotastic/trunk-recorder/master/lib/gr-osmosdr/airspy_source_c.cc.patch | git apply -v && \
   mkdir build && \
   cd build && \
   cmake -DENABLE_NONFREE=TRUE .. && \
   make -j$(nproc) && \
   make install && \
   ldconfig && \
+  # compile trunk-recorder
   cd /tmp && \
-  rm -rf gr-osmosdr airspy_source_c.cc.patch
-
-WORKDIR /src
-
-COPY . .
-
-WORKDIR /src/build
-
-RUN cmake .. && make -j$(nproc) && make install && \
+  git clone --depth=1 https://github.com/robotastic/trunk-recorder.git && \
+  cd trunk-recorder && \
+  mkdir build && \
+  cd build && \
+  cmake ../ && \
+  make -j$(nproc) && \
+  make install && \
   # Clean up
   apt-get autoremove -y && \
   rm -rf /src/* /tmp/* /var/lib/apt/lists/*
